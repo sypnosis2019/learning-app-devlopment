@@ -7,6 +7,8 @@ export default function Index() {
         <s-link href="/app/products">View first 5 products</s-link>
         <br />
         <s-link href="/app/create_product">Create a product</s-link>
+        <br />
+        <s-link href="/app/update_product">Update a product</s-link>
       </s-section>
     </s-page>
   );
