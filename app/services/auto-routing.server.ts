@@ -62,10 +62,24 @@ export async function upsertAutoFulfillmentRoutingSettings(
   return { enabled, fallbackLocationId: fallbackLocationId ?? undefined, normalLocationIds };
 }
 
-function getOrderIdFromPayload(payload: Record<string, any>): string | undefined {
+function getOrderGraphqlIdFromPayload(payload: Record<string, any>): string | undefined {
+  // Prefer Shopify's GraphQL Admin ID from the webhook payload.
+  if (typeof payload?.admin_graphql_api_id === "string" && payload.admin_graphql_api_id.length > 0) {
+    return payload.admin_graphql_api_id;
+  }
+
+  // Fallback for webhook payloads that only contain the legacy numeric REST ID.
   const rawOrderId = payload?.id ?? payload?.order?.id;
-  if (typeof rawOrderId === "string" && rawOrderId.length > 0) return rawOrderId;
-  if (typeof rawOrderId === "number" && Number.isFinite(rawOrderId)) return String(rawOrderId);
+  if (typeof rawOrderId === "string" && rawOrderId.length > 0) {
+    return rawOrderId.startsWith("gid://shopify/Order/")
+      ? rawOrderId
+      : `gid://shopify/Order/${rawOrderId}`;
+  }
+
+  if (typeof rawOrderId === "number" && Number.isFinite(rawOrderId)) {
+    return `gid://shopify/Order/${rawOrderId}`;
+  }
+
   return undefined;
 }
 
@@ -86,13 +100,13 @@ export async function processOrderAutoFulfillmentRouting(
     return;
   }
 
-  const orderId = getOrderIdFromPayload(payload);
+  const orderId = getOrderGraphqlIdFromPayload(payload);
   if (!orderId) {
     console.log(`[AutoRouting] shop=${shop} status=invalid-payload decision=skipped could-not-read-order-id payloadKeys=${Object.keys(payload ?? {}).join(",")}`);
     return;
   }
 
-  console.log(`[AutoRouting] shop=${shop} order=${orderId} webhook-payload-order-id-detected`);
+  console.log(`[AutoRouting] shop=${shop} order=${orderId} graphql-order-id-detected`);
 
   const orderResponse = await admin.graphql(
     `#graphql
@@ -100,27 +114,28 @@ export async function processOrderAutoFulfillmentRouting(
         order(id: $id) {
           id
           name
-          lineItems(first: 250) {
-            edges {
-              node {
-                id
-                variant {
-                  id
-                  inventoryPolicy
-                  inventoryItem { id }
-                }
-              }
-            }
-          }
           fulfillmentOrders(first: 50) {
             edges {
               node {
                 id
                 status
+                requestStatus
                 assignedLocation {
                   location {
                     id
                     name
+                  }
+                }
+                lineItems(first: 250) {
+                  edges {
+                    node {
+                      id
+                      remainingQuantity
+                      variant {
+                        id
+                        inventoryPolicy
+                      }
+                    }
                   }
                 }
               }
@@ -145,22 +160,6 @@ export async function processOrderAutoFulfillmentRouting(
     return;
   }
 
-  const eligibleVariants = (order.lineItems?.edges ?? [])
-    .map((edge: any) => edge.node)
-    .filter((lineItem: any) => lineItem?.variant?.inventoryPolicy === "CONTINUE")
-    .map((lineItem: any) => ({
-      variantId: lineItem.variant.id,
-      inventoryItemId: lineItem.variant.inventoryItem?.id,
-      inventoryPolicy: lineItem.variant.inventoryPolicy,
-    }));
-
-  if (eligibleVariants.length === 0) {
-    console.log(`[AutoRouting] shop=${shop} order=${orderName} decision=skipped no-continuable-variants`);
-    return;
-  }
-
-  console.log(`[AutoRouting] shop=${shop} order=${orderName} eligibleVariants=${eligibleVariants.length} decision=Move to Fallback`);
-
   const fulfillmentOrderEdges = order.fulfillmentOrders?.edges ?? [];
   if (fulfillmentOrderEdges.length === 0) {
     console.log(`[AutoRouting] shop=${shop} order=${orderName} decision=no-fulfillment-orders`);
@@ -171,21 +170,48 @@ export async function processOrderAutoFulfillmentRouting(
     const fulfillmentOrder = edge.node;
     if (!fulfillmentOrder?.id) continue;
 
-    const assignedLocationId = fulfillmentOrder.assignedLocation?.location?.id;
-    if (assignedLocationId === settings.fallbackLocationId) {
-      console.log(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=already-at-fallback location=${assignedLocationId}`);
+    const eligibleLineItems = (fulfillmentOrder.lineItems?.edges ?? [])
+      .map((lineItemEdge: any) => lineItemEdge.node)
+      .filter((lineItem: any) =>
+        lineItem?.remainingQuantity > 0 &&
+        lineItem?.variant?.inventoryPolicy === "CONTINUE"
+      )
+      .map((lineItem: any) => ({
+        id: lineItem.id,
+        quantity: lineItem.remainingQuantity,
+        variantId: lineItem.variant.id,
+      }));
+
+    if (eligibleLineItems.length === 0) {
+      console.log(
+        `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=skipped no-continuable-line-items`
+      );
       continue;
     }
 
+    const assignedLocationId = fulfillmentOrder.assignedLocation?.location?.id;
+    if (assignedLocationId === settings.fallbackLocationId) {
+      console.log(
+        `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=already-at-fallback location=${assignedLocationId}`
+      );
+      continue;
+    }
+
+    console.log(
+      `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} eligibleLineItems=${eligibleLineItems.length} decision=Move eligible items to Fallback`
+    );
+
     const moveResponse = await admin.graphql(
       `#graphql
-        mutation moveFulfillmentOrder($fulfillmentOrderId: ID!, $locationId: ID!) {
+        mutation fulfillmentOrderMove($id: ID!, $newLocationId: ID!, $fulfillmentOrderLineItems: [FulfillmentOrderLineItemInput!]) {
           fulfillmentOrderMove(
-            fulfillmentOrderId: $fulfillmentOrderId
-            moveFulfillmentOrderInput: { assignedLocationId: $locationId }
+            id: $id
+            newLocationId: $newLocationId
+            fulfillmentOrderLineItems: $fulfillmentOrderLineItems
           ) {
-            fulfillmentOrder {
+            movedFulfillmentOrder {
               id
+              status
               assignedLocation {
                 location {
                   id
@@ -193,11 +219,43 @@ export async function processOrderAutoFulfillmentRouting(
                 }
               }
             }
-            userErrors { field message }
+            originalFulfillmentOrder {
+              id
+              status
+              assignedLocation {
+                location {
+                  id
+                  name
+                }
+              }
+            }
+            remainingFulfillmentOrder {
+              id
+              status
+              assignedLocation {
+                location {
+                  id
+                  name
+                }
+              }
+            }
+            userErrors {
+              field
+              message
+            }
           }
         }
       `,
-      { variables: { fulfillmentOrderId: fulfillmentOrder.id, locationId: settings.fallbackLocationId } }
+      {
+        variables: {
+          id: fulfillmentOrder.id,
+          newLocationId: settings.fallbackLocationId,
+          fulfillmentOrderLineItems: eligibleLineItems.map((item: { id: string; quantity: number }) => ({
+            id: item.id,
+            quantity: item.quantity,
+          })),
+        },
+      }
     );
 
     const moveResult = await moveResponse.json();
@@ -205,17 +263,25 @@ export async function processOrderAutoFulfillmentRouting(
     const userErrors = moveData?.userErrors ?? [];
 
     if (userErrors.length > 0) {
-      console.error(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} move-errors=${JSON.stringify(userErrors)}`);
+      console.error(
+        `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} move-errors=${JSON.stringify(userErrors)}`
+      );
       continue;
     }
 
     if (moveResult?.errors?.length > 0) {
-      console.error(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} graphql-errors=${JSON.stringify(moveResult.errors)}`);
+      console.error(
+        `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} graphql-errors=${JSON.stringify(moveResult.errors)}`
+      );
       continue;
     }
 
-    const movedLocationId = moveData?.fulfillmentOrder?.assignedLocation?.location?.id;
-    const movedLocationName = moveData?.fulfillmentOrder?.assignedLocation?.location?.name;
-    console.log(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=moved-to-fallback locationId=${movedLocationId} locationName=${movedLocationName}`);
+    const moved = moveData?.movedFulfillmentOrder;
+    const movedLocationId = moved?.assignedLocation?.location?.id;
+    const movedLocationName = moved?.assignedLocation?.location?.name;
+
+    console.log(
+      `[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=moved-to-fallback locationId=${movedLocationId} locationName=${movedLocationName}`
+    );
   }
 }
