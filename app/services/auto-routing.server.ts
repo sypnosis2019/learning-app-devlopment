@@ -63,7 +63,6 @@ export async function upsertAutoFulfillmentRoutingSettings(
 }
 
 function getOrderIdFromPayload(payload: Record<string, any>): string | undefined {
-  // Shopify orders/create payload uses a numeric REST order id.
   const rawOrderId = payload?.id ?? payload?.order?.id;
   if (typeof rawOrderId === "string" && rawOrderId.length > 0) return rawOrderId;
   if (typeof rawOrderId === "number" && Number.isFinite(rawOrderId)) return String(rawOrderId);
@@ -118,7 +117,12 @@ export async function processOrderAutoFulfillmentRouting(
               node {
                 id
                 status
-                assignedLocation { id name }
+                assignedLocation {
+                  location {
+                    id
+                    name
+                  }
+                }
               }
             }
           }
@@ -167,7 +171,7 @@ export async function processOrderAutoFulfillmentRouting(
     const fulfillmentOrder = edge.node;
     if (!fulfillmentOrder?.id) continue;
 
-    const assignedLocationId = fulfillmentOrder.assignedLocation?.id;
+    const assignedLocationId = fulfillmentOrder.assignedLocation?.location?.id;
     if (assignedLocationId === settings.fallbackLocationId) {
       console.log(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=already-at-fallback location=${assignedLocationId}`);
       continue;
@@ -180,7 +184,15 @@ export async function processOrderAutoFulfillmentRouting(
             fulfillmentOrderId: $fulfillmentOrderId
             moveFulfillmentOrderInput: { assignedLocationId: $locationId }
           ) {
-            fulfillmentOrder { id assignedLocation { id name } }
+            fulfillmentOrder {
+              id
+              assignedLocation {
+                location {
+                  id
+                  name
+                }
+              }
+            }
             userErrors { field message }
           }
         }
@@ -202,8 +214,8 @@ export async function processOrderAutoFulfillmentRouting(
       continue;
     }
 
-    const movedLocationId = moveData?.fulfillmentOrder?.assignedLocation?.id;
-    const movedLocationName = moveData?.fulfillmentOrder?.assignedLocation?.name;
+    const movedLocationId = moveData?.fulfillmentOrder?.assignedLocation?.location?.id;
+    const movedLocationName = moveData?.fulfillmentOrder?.assignedLocation?.location?.name;
     console.log(`[AutoRouting] shop=${shop} order=${orderName} fulfillmentOrder=${fulfillmentOrder.id} decision=moved-to-fallback locationId=${movedLocationId} locationName=${movedLocationName}`);
   }
 }
