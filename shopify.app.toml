@@ -2,12 +2,12 @@
 
 client_id = "b01f7045b3ca49311dd64918332b97bd"
 name = "learning-app-devlopment"
-application_url = "https://example.com"
+application_url = "https://client-auto-fulfillment-routing-for.onrender.com"
 embedded = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_orders,write_metaobjects,write_metaobject_definitions"
+# Learn more about configuring scopes at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_locations,write_locations,read_orders,write_orders,read_inventory,write_products,write_metaobjects,write_metaobject_definitions,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -44,9 +44,13 @@ api_version = "2026-10"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/orders_create"
+  topics = [ "orders/create" ]
+
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://client-auto-fulfillment-routing-for.onrender.com/auth/callback" ]
 
 [build]
 include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
