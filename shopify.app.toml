@@ -2,7 +2,7 @@
 
 client_id = "b01f7045b3ca49311dd64918332b97bd"
 name = "learning-app-devlopment"
-application_url = "https://example.com"
+application_url = "https://client-auto-fulfillment-routing-for.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -49,8 +49,8 @@ api_version = "2026-10"
   topics = [ "orders/create" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://client-auto-fulfillment-routing-for.onrender.com/auth/callback" ]
 
 [build]
 include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
