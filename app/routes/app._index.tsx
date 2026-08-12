@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-export default function Index() {
-  return (
-    <s-page heading="Shopify Learning App">
-      <s-section>
-        <s-heading>Home</s-heading>
-        <s-paragraph>Welcome to your learning app.</s-paragraph>
-        <s-link href="/app/products">View first 5 products</s-link>
-=======
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -27,12 +18,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let locationsError: string | undefined;
 
   try {
-    const response = await admin.graphql(`query { locations(first: 250) { edges { node { id name } } } }`);
+    const response = await admin.graphql(
+      `query { locations(first: 250) { edges { node { id name } } } }`,
+    );
     const json = await response.json();
-    if (json?.errors?.length) throw new Error(json.errors[0]?.message || "Unable to load locations.");
-    locations = (json?.data?.locations?.edges ?? []).map((edge: any) => ({ id: edge.node.id, name: edge.node.name }));
+    if (json?.errors?.length) {
+      throw new Error(json.errors[0]?.message || "Unable to load locations.");
+    }
+    locations = (json?.data?.locations?.edges ?? []).map((edge: any) => ({
+      id: edge.node.id,
+      name: edge.node.name,
+    }));
   } catch (error) {
-    locationsError = error instanceof Error ? error.message : "Unable to load locations.";
+    locationsError =
+      error instanceof Error ? error.message : "Unable to load locations.";
   }
 
   const settings = await getAutoFulfillmentRoutingSettings(shopDomain);
@@ -68,13 +67,25 @@ export default function Index() {
           When enabled, order items whose variant has Continue selling when out of stock enabled are moved to the selected fallback fulfillment location. Other items remain with Shopify's normal routing.
         </s-paragraph>
 
-        {locationsError ? <s-banner tone="critical">Unable to load locations: {locationsError}</s-banner> : null}
-        {actionData?.success ? <s-banner tone="success">Settings saved successfully.</s-banner> : null}
+        {locationsError ? (
+          <s-banner tone="critical">
+            Unable to load locations: {locationsError}
+          </s-banner>
+        ) : null}
+        {actionData?.success ? (
+          <s-banner tone="success">Settings saved successfully.</s-banner>
+        ) : null}
 
         <Form method="post">
           <div style={{ marginBottom: "1rem" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input type="checkbox" name="enabled" value="true" defaultChecked={settings.enabled} disabled={Boolean(locationsError)} />
+              <input
+                type="checkbox"
+                name="enabled"
+                value="true"
+                defaultChecked={settings.enabled}
+                disabled={Boolean(locationsError)}
+              />
               Enable Auto Routing
             </label>
           </div>
@@ -82,20 +93,27 @@ export default function Index() {
           <div style={{ marginBottom: "1rem" }}>
             <label htmlFor="fallbackLocationId">Fallback Fulfillment Location</label>
             <br />
-            <select id="fallbackLocationId" name="fallbackLocationId" defaultValue={settings.fallbackLocationId ?? ""} style={{ width: "100%", padding: "0.75rem", borderRadius: "0.5rem" }} disabled={Boolean(locationsError)}>
+            <select
+              id="fallbackLocationId"
+              name="fallbackLocationId"
+              defaultValue={settings.fallbackLocationId ?? ""}
+              style={{ width: "100%", padding: "0.75rem", borderRadius: "0.5rem" }}
+              disabled={Boolean(locationsError)}
+            >
               <option value="">Select fallback location</option>
-              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
             </select>
           </div>
 
-          <s-button type="submit" disabled={Boolean(locationsError)}>Save Settings</s-button>
+          <s-button type="submit" disabled={Boolean(locationsError)}>
+            Save Settings
+          </s-button>
         </Form>
->>>>>>> 9e4c2c592b902ec0c84295770032716c78d31109
       </s-section>
     </s-page>
   );
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> 9e4c2c592b902ec0c84295770032716c78d31109
