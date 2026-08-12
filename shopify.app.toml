@@ -6,7 +6,7 @@ application_url = "https://client-auto-fulfillment-routing-for.onrender.com"
 embedded = true
 
 [access_scopes]
-scopes = "read_locations,read_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders"
+scopes = "read_products,read_locations,read_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders"
 
 [webhooks]
 api_version = "2026-07"
