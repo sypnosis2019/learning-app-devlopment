@@ -6,8 +6,8 @@ application_url = "https://example.com"
 embedded = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_orders,write_metaobjects,write_metaobject_definitions"
+# Learn more about configuring scopes at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_locations,write_locations,read_orders,write_orders,read_inventory,write_products,write_metaobjects,write_metaobject_definitions,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -43,6 +43,10 @@ api_version = "2026-10"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/orders_create"
+  topics = [ "orders/create" ]
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
