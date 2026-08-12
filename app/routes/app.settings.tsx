@@ -16,7 +16,6 @@ type LoaderData = {
   settings: {
     enabled: boolean;
     fallbackLocationId?: string;
-    normalLocationIds: string[];
   };
   locationsError?: string;
 };
@@ -61,8 +60,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       error instanceof Error
         ? error.message
         : typeof error === "string"
-        ? error
-        : "Unable to load locations.";
+          ? error
+          : "Unable to load locations.";
     console.error(
       `[AutoRouting Settings] shop=${shopDomain} locations query failed: ${locationsError}`
     );
@@ -70,7 +69,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const settings = await getAutoFulfillmentRoutingSettings(shopDomain);
 
-  return { locations, settings, locationsError } as LoaderData;
+  return {
+    locations,
+    settings: {
+      enabled: settings.enabled,
+      fallbackLocationId: settings.fallbackLocationId,
+    },
+    locationsError,
+  } as LoaderData;
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -89,17 +95,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const enabled = formData.get("enabled") === "true" || formData.get("enabled") === "on";
   const fallbackLocationId = String(formData.get("fallbackLocationId") || "");
-  const normalLocationIds = formData
-    .getAll("normalLocationIds")
-    .filter((value) => value !== null && value !== undefined)
-    .map((item) => String(item))
-    .filter(Boolean);
 
   await upsertAutoFulfillmentRoutingSettings(
     shopDomain,
     enabled,
     fallbackLocationId || null,
-    normalLocationIds
+    []
   );
 
   return { success: true };
@@ -110,7 +111,6 @@ export default function SettingsPage() {
   const actionData = useActionData<typeof action>();
 
   const { locations, settings, locationsError } = data;
-
   const locationsUnavailable = Boolean(locationsError);
 
   return (
@@ -156,26 +156,6 @@ export default function SettingsPage() {
               disabled={locationsUnavailable}
             >
               <option value="">Select fallback location</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginBottom: "1rem" }}>
-            <label htmlFor="normalLocationIds">Normal Fulfillment Locations</label>
-            <br />
-            <select
-              id="normalLocationIds"
-              name="normalLocationIds"
-              multiple
-              size={Math.min(6, locations.length || 3)}
-              defaultValue={settings.normalLocationIds}
-              style={{ width: "100%", minHeight: "10rem", padding: "0.75rem", borderRadius: "0.5rem" }}
-              disabled={locationsUnavailable}
-            >
               {locations.map((location) => (
                 <option key={location.id} value={location.id}>
                   {location.name}
