@@ -32,3 +32,13 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+<<<<<<< HEAD
+=======
+
+model AutoFulfillmentRoutingSetting {
+  shop               String  @id
+  enabled            Boolean @default(false)
+  fallbackLocationId String?
+  normalLocationIds  Json    @default("[]")
+}
+>>>>>>> 9e4c2c592b902ec0c84295770032716c78d31109

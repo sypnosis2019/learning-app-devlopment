@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "include": ["env.d.ts", "**/*.ts", "**/*.tsx", ".react-router/types/**/*"],
+=======
+  "include": ["env.d.ts", "**/*.ts", "**/*.tsx", "**/*.d.ts", ".react-router/types/**/*"],
+>>>>>>> 9e4c2c592b902ec0c84295770032716c78d31109
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "strict": true,
